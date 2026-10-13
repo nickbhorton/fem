@@ -10,4 +10,5 @@ dependencies = [
     "meshio>=5.3.5",
     "numpy>=2.5.3",
     "ruff>=0.16.10",
+    "scipy>=1.18.1",
 ]

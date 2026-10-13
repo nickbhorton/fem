@@ -2,6 +2,9 @@ import gmsh
 import numpy as np
 
 gmsh.initialize()
+
+gmsh.option.setNumber("General.Verbosity", 1)
+
 gmsh.model.add("coax")
 
 a, b = 0.5, 2.0
