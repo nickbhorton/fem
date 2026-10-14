@@ -59,8 +59,8 @@ phi[nodes_free] = np.asarray(spla.spsolve(k_alpha_free.tocsc(), b_dirichlet))
 
 C_sim = epsilon_0 * phi @ (k_alpha @ phi) / (inner_potential - outer_potential) ** 2
 C_exact = 2 * np.pi * epsilon_0 * epsilon_m * a / (b - a) * (1/12)
-print(C_sim * 1e12 * 12)
-print(C_exact * 1e12 * 12)
+# print(C_sim * 1e12 * 12)
+# print(C_exact * 1e12 * 12)
 print(np.abs(C_sim - C_exact) / C_exact * 100, "% error")
 
 # plot

@@ -20,7 +20,6 @@ lines = mesh.get_cells_type("line")
 line_tag = mesh.get_cell_data("gmsh:physical", "line")
 
 name_to_tag = {k: int(v[0]) for k, v in mesh.field_data.items()}
-print(name_to_tag)
 
 # boundary condition lines
 inner_d = lines[line_tag == name_to_tag["inner_d"]]
@@ -34,7 +33,6 @@ domain = elements[element_tag == name_to_tag["domain"]]
 
 a = np.abs(nodes[inner_d].max())
 b = np.abs(nodes[outer_d].max())
-print(a, b)
 inner_potential = 1.0
 outer_potential = 0.0
 k_alpha = assemble_k_alpha(nodes, domain)

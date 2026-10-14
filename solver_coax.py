@@ -26,8 +26,8 @@ outer = lines[line_tag == name_to_tag["outer"]]
 domain = elements[element_tag == name_to_tag["domain"]]
 
 
-a = np.abs(nodes[inner].min())
-b = np.abs(nodes[inner].min())
+a = np.abs(nodes[inner].max())
+b = np.abs(nodes[outer].max())
 inner_potential = 1.0
 outer_potential = 0.0
 k_alpha = assemble_k_alpha(nodes, domain)
