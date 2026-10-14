@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 import numpy as np
 
-mesh = meshio.read("partial_coax.msh")
+mesh = meshio.read("coax.msh")
 nodes = mesh.points[:, :2]
 elements = mesh.get_cells_type("triangle")
 print(elements.dtype)

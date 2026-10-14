@@ -2,7 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 
 
-def assemble_k_alpha(nodes: np.ndarray, elements: np.ndarray):
+def assemble_k_alpha(nodes: np.ndarray, elements: np.ndarray, alpha: np.ndarray | None = None):
     """
     This function assembles the k_alpha matrix. It does so without using python
     loops which was somewhat difficult to achieve (thank you claude / gemini).
@@ -34,6 +34,9 @@ def assemble_k_alpha(nodes: np.ndarray, elements: np.ndarray):
     k = (bs[:, :, None] * bs[:, None, :] + cs[:, :, None] * cs[:, None, :]) / (
         2.0 * two_delta[:, None, None]
     )
+    if alpha is not None:
+        # alpha[elements].mean(axis=1) averages the alpha on the element
+        k = alpha[elements].mean(axis=1)[:, None, None] * k
     rows = np.repeat(elements, 3, axis=1)  # [1 1 1 2 2 2 3 3 3]
     cols = np.tile(elements, (1, 3))  # [1 2 3 1 2 3 1 2 3]
     return sp.coo_matrix(
