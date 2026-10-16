@@ -1,8 +1,12 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
+from matplotlib import tri
 
 
-def assemble_k_alpha(nodes: np.ndarray, elements: np.ndarray, alpha: np.ndarray | None = None):
+def assemble_k_alpha(
+    nodes: np.ndarray, elements: np.ndarray, alpha: np.ndarray | None = None
+):
     """
     This function assembles the k_alpha matrix. It does so without using python
     loops which was somewhat difficult to achieve (thank you claude / gemini).
@@ -43,3 +47,27 @@ def assemble_k_alpha(nodes: np.ndarray, elements: np.ndarray, alpha: np.ndarray 
         (k.ravel(), (rows.ravel(), cols.ravel())),
         shape=(nodes.shape[0], nodes.shape[0]),
     ).tocsr()
+
+
+def fem_plot(nodes, elements, phi, savefig=False, savepath="default.png"):
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5), constrained_layout=True)
+    triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+
+    ax[0].triplot(triang, lw=0.5, color="grey")
+    ax[0].scatter(nodes[:, 0], nodes[:, 1], c=phi, cmap="inferno")
+    ax[0].set_aspect("equal")
+    ax[0].set_xlabel("x (m)")
+    ax[0].set_ylabel("y (m)")
+    ax[0].set_title("Node Solutions")
+
+    pc = ax[1].tripcolor(triang, phi, shading="gouraud", cmap="inferno")
+    ax[1].set_aspect("equal")
+    ax[1].set_xlabel("x (m)")
+    ax[1].set_ylabel("y (m)")
+    ax[1].set_title("Elements with Gouraud Shading")
+
+    fig.colorbar(pc, ax=ax[0], fraction=0.046, pad=0.04)
+    fig.colorbar(pc, ax=ax[1], fraction=0.046, pad=0.04)
+    if savefig:
+        fig.savefig(savepath, dpi=200)
+    return fig

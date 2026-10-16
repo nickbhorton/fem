@@ -3,7 +3,7 @@ import numpy as np
 
 gmsh.initialize()
 
-gmsh.option.setNumber("General.Verbosity", 1)
+# gmsh.option.setNumber("General.Verbosity", 1)
 
 gmsh.model.add("coax")
 

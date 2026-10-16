@@ -1,12 +1,10 @@
+import matplotlib.pyplot as plt
+import meshio
 import numpy as np
-import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.constants import epsilon_0
-import matplotlib.pyplot as plt
-import matplotlib.tri as tri
-import meshio
 
-from lib import assemble_k_alpha
+from lib import assemble_k_alpha, fem_plot
 
 mesh = meshio.read("partial_coax.msh")
 if mesh is None:
@@ -32,12 +30,12 @@ domain = elements[element_tag == name_to_tag["domain"]]
 a = np.abs(nodes[inner_n].max())
 b = np.abs(nodes[outer_d].max())
 epsilon_m = 5
-rho = np.sqrt(nodes[:, 0] ** 2 + nodes[:, 1] **2)
+rho = np.sqrt(nodes[:, 0] ** 2 + nodes[:, 1] ** 2)
 epsilon_r = epsilon_m * (a / rho)
 
 outer_potential = 0.0
 inner_potential = 1.0
-c_prime = 2 * np.pi * epsilon_0 * epsilon_m * a / (b - a) * (1/12)
+c_prime = 2 * np.pi * epsilon_0 * epsilon_m * a / (b - a)
 rho_s = c_prime / (2.0 * np.pi * a * epsilon_0)
 
 k_alpha = assemble_k_alpha(nodes, domain, epsilon_r)
@@ -53,14 +51,15 @@ phi_dirichlet = np.concatenate(
         outer_potential * np.ones(len(nodes_outer_d)),
     ]
 )
-kappa_neumann = rho_s / epsilon_0
+kappa_neumann = rho_s
 
 k_alpha_free = k_alpha[np.ix_(nodes_free, nodes_free)]
 b_dirichlet = -k_alpha[np.ix_(nodes_free, nodes_dirichlet)] @ phi_dirichlet
 
 b_neumann = np.zeros(len(nodes))
-print(kappa_neumann)
-b_neumann[nodes_neumann] = kappa_neumann
+edges_neumann = nodes[inner_n]  # (number_neumann_edges, (p1, p2), (x, y))
+edge_lengths = np.linalg.norm(edges_neumann[:, 0, :] - edges_neumann[:, 1, :], axis=1)
+np.add.at(b_neumann, inner_n.ravel(), np.repeat(0.5 * kappa_neumann * edge_lengths, 2))
 b_neumann = b_neumann[nodes_free]
 
 b_total = b_dirichlet + b_neumann
@@ -70,15 +69,10 @@ phi[nodes_dirichlet] = phi_dirichlet
 phi[nodes_free] = np.asarray(spla.spsolve(k_alpha_free.tocsc(), b_total))
 
 C_sim = epsilon_0 * phi @ (k_alpha @ phi) / (inner_potential - outer_potential) ** 2
-C_exact = 2 * np.pi * epsilon_0 * epsilon_m * a / (b - a) * (1/12)
-# print(C_sim * 1e12 * 12)
-# print(C_exact * 1e12 * 12)
+C_exact = 2 * np.pi * epsilon_0 * epsilon_m * a / (b - a) * (1 / 12)
+print(C_sim * 1e12 * 12)
+print(C_exact * 1e12 * 12)
 print(np.abs(C_sim - C_exact) / C_exact * 100, "% error")
 
-# plot
-fig, ax = plt.subplots()
-triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], domain)
-pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="inferno")
-fig.colorbar(pc, ax=ax)
-ax.set_aspect("equal")
+fem_plot(nodes, domain, phi)
 plt.show()

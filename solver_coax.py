@@ -1,10 +1,9 @@
+from lib import fem_plot
+import matplotlib.pyplot as plt
+import meshio
 import numpy as np
-import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.constants import epsilon_0
-import matplotlib.pyplot as plt
-import matplotlib.tri as tri
-import meshio
 
 from lib import assemble_k_alpha
 
@@ -52,12 +51,9 @@ phi[nodes_free] = np.asarray(spla.spsolve(k_alpha_free.tocsc(), b_dirichlet))
 
 C_sim = epsilon_0 * phi @ (k_alpha @ phi) / (inner_potential - outer_potential) ** 2
 C_exact = 2 * np.pi * epsilon_0 / np.log(b / a)
+print(C_sim * 1e12)
+print(C_exact * 1e12)
 print(np.abs(C_sim - C_exact) / C_exact * 100, "% error")
 
-# plot
-fig, ax = plt.subplots()
-triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], domain)
-pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="inferno")
-fig.colorbar(pc, ax=ax)
-ax.set_aspect("equal")
+fig1 = fem_plot(nodes, domain, phi, True, "plots/coax.png")
 plt.show()

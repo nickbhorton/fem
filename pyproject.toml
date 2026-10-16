@@ -9,6 +9,12 @@ dependencies = [
     "matplotlib>=3.11.2",
     "meshio>=5.3.5",
     "numpy>=2.5.3",
+    "pyqt6>=6.11.0",
     "ruff>=0.16.10",
     "scipy>=1.18.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.10",
 ]
