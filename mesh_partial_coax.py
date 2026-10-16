@@ -8,7 +8,7 @@ gmsh.option.setNumber("General.Verbosity", 1)
 gmsh.model.add("partial_coax")
 
 a, b = 0.5, 2.0
-lc = 0.25  # target element size
+lc = 0.10  # target element size
 
 angle = np.pi / 6
 
