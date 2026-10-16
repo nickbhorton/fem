@@ -30,13 +30,13 @@ def assemble_k_alpha(
     cs[:, 0] = x[:, 2] - x[:, 1]
     cs[:, 1] = x[:, 0] - x[:, 2]
     cs[:, 2] = x[:, 1] - x[:, 0]
-    two_delta = np.abs(bs[:, 0] * cs[:, 1] - bs[:, 1] * cs[:, 0])
+    two_area = np.abs(bs[:, 0] * cs[:, 1] - bs[:, 1] * cs[:, 0])
     # (number_of_elements, 3, 3)
     # [b1 * b1, b1 * b2, b1 * b3]
     # [b2 * b1, b2 * b2, b2 * b3]
     # [b3 * b1, b3 * b2, b3 * b3]
     k = (bs[:, :, None] * bs[:, None, :] + cs[:, :, None] * cs[:, None, :]) / (
-        2.0 * two_delta[:, None, None]
+        2.0 * two_area[:, None, None]
     )
     if alpha is not None:
         # alpha[elements].mean(axis=1) averages the alpha on the element
@@ -47,6 +47,20 @@ def assemble_k_alpha(
         (k.ravel(), (rows.ravel(), cols.ravel())),
         shape=(nodes.shape[0], nodes.shape[0]),
     ).tocsr()
+
+
+def get_element_area(nodes: np.ndarray, elements: np.ndarray):
+    x = nodes[elements, 0]
+    y = nodes[elements, 1]
+    bs = np.zeros((len(elements), 3))
+    bs[:, 0] = y[:, 1] - y[:, 2]
+    bs[:, 1] = y[:, 2] - y[:, 0]
+    bs[:, 2] = y[:, 0] - y[:, 1]
+    cs = np.zeros((len(elements), 3))
+    cs[:, 0] = x[:, 2] - x[:, 1]
+    cs[:, 1] = x[:, 0] - x[:, 2]
+    cs[:, 2] = x[:, 1] - x[:, 0]
+    return 0.5 * np.abs(bs[:, 0] * cs[:, 1] - bs[:, 1] * cs[:, 0])
 
 
 def fem_plot(nodes, elements, phi, savefig=False, savepath="default.png"):
