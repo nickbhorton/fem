@@ -71,10 +71,9 @@ kappa_neumann = 10.0 / (2.0 * np.pi * a)
 # (number_neumann_edges, (p1, p2), (x, y))
 edges_neumann = node_coords[inner_n_line_indicies]
 edge_lengths = np.linalg.norm(edges_neumann[:, 0, :] - edges_neumann[:, 1, :], axis=1)
-
 np.add.at(
     b_neumann,
-    inner_n_line_indicies.ravel(),  # every node index on a line
+    inner_n_line_indicies.ravel(),
     np.repeat(0.5 * kappa_neumann * edge_lengths, 2),
 )
 b_neumann = b_neumann[free_node_indicies]
@@ -82,8 +81,12 @@ b_neumann = b_neumann[free_node_indicies]
 # b_force
 b_force = np.zeros(len(node_coords))
 force_constant = 0.1 / np.pi / a**2
-b_elementwise = force_constant * get_element_area(node_coords, element_indicies) / 3
-np.add.at(b_force, element_indicies.ravel(), np.repeat(b_elementwise, 3))
+
+np.add.at(
+    b_force,
+    element_indicies.ravel(),
+    np.repeat(force_constant * get_element_area(node_coords, element_indicies) / 3, 3),
+)
 b_force = b_force[free_node_indicies]
 
 # b_total
