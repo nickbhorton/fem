@@ -21,7 +21,6 @@ inner_line_indices = line_indices[line_tag == name_to_tag["inner"]]
 outer_line_indices = line_indices[line_tag == name_to_tag["outer"]]
 domain_element_indicies = element_indices[element_tag == name_to_tag["domain"]]
 
-
 inner_radius = np.abs(node_coords[inner_line_indices].max())
 outer_radius = np.abs(node_coords[outer_line_indices].max())
 

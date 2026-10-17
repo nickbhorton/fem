@@ -80,14 +80,10 @@ np.add.at(
 b_neumann = b_neumann[free_node_indicies]
 
 # b_force
-force_constant = 0.1 / np.pi / a**2
 b_force = np.zeros(len(node_coords))
-element_areas = get_element_area(node_coords, element_indicies)
-for i, (i1, i2, i3) in enumerate(element_indicies):
-    element_area = element_areas[i]
-    b_force[i1] += force_constant * element_area / 3
-    b_force[i2] += force_constant * element_area / 3
-    b_force[i3] += force_constant * element_area / 3
+force_constant = 0.1 / np.pi / a**2
+b_elementwise = force_constant * get_element_area(node_coords, element_indicies) / 3
+np.add.at(b_force, element_indicies.ravel(), np.repeat(b_elementwise, 3))
 b_force = b_force[free_node_indicies]
 
 # b_total
