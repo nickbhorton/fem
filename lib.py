@@ -4,8 +4,24 @@ import scipy.sparse as sp
 from matplotlib import tri
 
 
+def get_element_area(nodes: np.ndarray, elements: np.ndarray):
+    x = nodes[elements, 0]
+    y = nodes[elements, 1]
+    bs = np.zeros((len(elements), 3))
+    bs[:, 0] = y[:, 1] - y[:, 2]
+    bs[:, 1] = y[:, 2] - y[:, 0]
+    bs[:, 2] = y[:, 0] - y[:, 1]
+    cs = np.zeros((len(elements), 3))
+    cs[:, 0] = x[:, 2] - x[:, 1]
+    cs[:, 1] = x[:, 0] - x[:, 2]
+    cs[:, 2] = x[:, 1] - x[:, 0]
+    return 0.5 * np.abs(bs[:, 0] * cs[:, 1] - bs[:, 1] * cs[:, 0])
+
+
 def assemble_k_alpha(
-    nodes: np.ndarray, elements: np.ndarray, alpha: np.ndarray | None = None
+    nodes_coords: np.ndarray,
+    domain_element_indicies: np.ndarray,
+    alpha: np.ndarray | None = None,
 ):
     """
     This function assembles the k_alpha matrix. It does so without using python
@@ -14,19 +30,22 @@ def assemble_k_alpha(
     Then a compressed sparse row matrix (csr) is fast for row operations.
     And a compressed sparse column matrix (csc) is fast for column operations.
     The k_alpha matrix is returned as a csr for matrix multiplication speed
-    for boundary condition calculations but should be converted to a csc for
-    spla.spsolve() (or at least that is what gemini says docs don't say that)
+    for boundary condition calculations, but should be converted to a csc for
+    spla.spsolve()
 
-    nodes: np.ndarray of (number_of_nodes, 2), x and y coords of nodes
-    elements: np.ndarray of (number_of_elements, 3) 3 node indexes into nodes.
+    node_coords: np.ndarray of (number_of_nodes, 2), x and y coords of nodes
+    domain_element_indicies: np.ndarray of (number_of_elements, 3)
+        3 node indices that construct a triangle.
+    alpha: np.ndarray of (number_of_nodes): represents the alpha value on each
+        node.
     """
-    x = nodes[elements, 0]
-    y = nodes[elements, 1]
-    bs = np.zeros((len(elements), 3))
+    x = nodes_coords[domain_element_indicies, 0]
+    y = nodes_coords[domain_element_indicies, 1]
+    bs = np.zeros((len(domain_element_indicies), 3))
     bs[:, 0] = y[:, 1] - y[:, 2]
     bs[:, 1] = y[:, 2] - y[:, 0]
     bs[:, 2] = y[:, 0] - y[:, 1]
-    cs = np.zeros((len(elements), 3))
+    cs = np.zeros((len(domain_element_indicies), 3))
     cs[:, 0] = x[:, 2] - x[:, 1]
     cs[:, 1] = x[:, 0] - x[:, 2]
     cs[:, 2] = x[:, 1] - x[:, 0]
@@ -40,27 +59,13 @@ def assemble_k_alpha(
     )
     if alpha is not None:
         # alpha[elements].mean(axis=1) averages the alpha on the element
-        k = alpha[elements].mean(axis=1)[:, None, None] * k
-    rows = np.repeat(elements, 3, axis=1)  # [1 1 1 2 2 2 3 3 3]
-    cols = np.tile(elements, (1, 3))  # [1 2 3 1 2 3 1 2 3]
+        k = alpha[domain_element_indicies].mean(axis=1)[:, None, None] * k
+    rows = np.repeat(domain_element_indicies, 3, axis=1)  # [1 1 1 2 2 2 3 3 3]
+    cols = np.tile(domain_element_indicies, (1, 3))  # [1 2 3 1 2 3 1 2 3]
     return sp.coo_matrix(
         (k.ravel(), (rows.ravel(), cols.ravel())),
-        shape=(nodes.shape[0], nodes.shape[0]),
+        shape=(nodes_coords.shape[0], nodes_coords.shape[0]),
     ).tocsr()
-
-
-def get_element_area(nodes: np.ndarray, elements: np.ndarray):
-    x = nodes[elements, 0]
-    y = nodes[elements, 1]
-    bs = np.zeros((len(elements), 3))
-    bs[:, 0] = y[:, 1] - y[:, 2]
-    bs[:, 1] = y[:, 2] - y[:, 0]
-    bs[:, 2] = y[:, 0] - y[:, 1]
-    cs = np.zeros((len(elements), 3))
-    cs[:, 0] = x[:, 2] - x[:, 1]
-    cs[:, 1] = x[:, 0] - x[:, 2]
-    cs[:, 2] = x[:, 1] - x[:, 0]
-    return 0.5 * np.abs(bs[:, 0] * cs[:, 1] - bs[:, 1] * cs[:, 0])
 
 
 def fem_plot(nodes, elements, phi, savefig=False, savepath="default.png"):
