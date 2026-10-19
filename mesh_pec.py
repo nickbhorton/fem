@@ -34,5 +34,5 @@ gmsh.model.addPhysicalGroup(2, [annulus[0][1]], name="domain")
 
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", lc)
 gmsh.model.mesh.generate(2)
-gmsh.write("pec.msh")
+gmsh.write("mesh/pec.msh")
 gmsh.finalize()

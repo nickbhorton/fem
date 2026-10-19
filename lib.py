@@ -21,7 +21,8 @@ def get_element_area(node_coords: np.ndarray, element_indices: np.ndarray):
 def assemble_k_alpha(
     node_coords: np.ndarray,
     element_indices: np.ndarray,
-    alpha: np.ndarray | None = None,
+    alpha: np.ndarray,
+    alpha_is_element_wise=False,
 ):
     """
     This function assembles the k_alpha matrix. It does so without using python
@@ -57,9 +58,11 @@ def assemble_k_alpha(
     k = (bs[:, :, None] * bs[:, None, :] + cs[:, :, None] * cs[:, None, :]) / (
         2.0 * two_area[:, None, None]
     )
-    if alpha is not None:
-        # alpha[elements].mean(axis=1) averages the alpha on the element
-        k = alpha[element_indices].mean(axis=1)[:, None, None] * k
+    if alpha_is_element_wise:
+        alpha_element_wise = alpha
+    else:
+        alpha_element_wise = alpha[element_indices].mean(axis=1)
+    k = alpha_element_wise[:, None, None] * k
     rows = np.repeat(element_indices, 3, axis=1)  # [1 1 1 2 2 2 3 3 3]
     cols = np.tile(element_indices, (1, 3))  # [1 2 3 1 2 3 1 2 3]
     return sp.coo_matrix(
@@ -71,8 +74,9 @@ def assemble_k_alpha(
 
 def assemble_k_beta(
     node_coords: np.ndarray,
-    domain_element_indices: np.ndarray,
-    beta: np.ndarray | None = None,
+    element_indices: np.ndarray,
+    beta: np.ndarray,
+    beta_is_element_wise=False,
 ):
     """
     This function assembles the k_beta matrix.
@@ -83,27 +87,46 @@ def assemble_k_beta(
     beta: np.ndarray of (number_of_nodes): represents the beta value on each
         node.
     """
-    element_areas = get_element_area(node_coords, domain_element_indices)
-    if beta is not None:
-        # alpha[elements].mean(axis=1) averages the alpha on the element
-        beta_element_wise = beta[domain_element_indices].mean(axis=1)
-        mult_array = (
-            np.tile(
-                np.array([2.0, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0]) / 12.0,
-                domain_element_indices.shape[0],
-            )
-            * np.repeat(element_areas, 9)
-            * np.repeat(beta_element_wise, 9)
-        )
+    element_areas = get_element_area(node_coords, element_indices)
+    if beta_is_element_wise:
+        beta_element_wise = beta
     else:
-        mult_array = np.tile(
+        beta_element_wise = beta[element_indices].mean(axis=1)
+    mult_array = (
+        np.tile(
             np.array([2.0, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0]) / 12.0,
-            domain_element_indices.shape[0],
-        ) * np.repeat(element_areas, 9)
-    rows = np.repeat(domain_element_indices, 3, axis=1)  # [1 1 1 2 2 2 3 3 3]
-    cols = np.tile(domain_element_indices, (1, 3))  # [1 2 3 1 2 3 1 2 3]
+            element_indices.shape[0],
+        )
+        * np.repeat(element_areas, 9)
+        * np.repeat(beta_element_wise, 9)
+    )
+    rows = np.repeat(element_indices, 3, axis=1)  # [1 1 1 2 2 2 3 3 3]
+    cols = np.tile(element_indices, (1, 3))  # [1 2 3 1 2 3 1 2 3]
     return sp.coo_matrix(
         (mult_array.ravel(), (rows.ravel(), cols.ravel())),
+        shape=(node_coords.shape[0], node_coords.shape[0]),
+        dtype=np.complex128,
+    ).tocsr()
+
+
+def assemble_k_gamma(
+    node_coords: np.ndarray,
+    line_indices: np.ndarray,
+    gamma: np.ndarray,
+):
+    edges_gamma = node_coords[line_indices]
+    edge_lengths_gamma = np.linalg.norm(
+        edges_gamma[:, 0, :] - edges_gamma[:, 1, :], axis=1
+    )
+    k = np.squeeze(
+        gamma[:, np.newaxis]
+        * edge_lengths_gamma[:, np.newaxis]
+        * np.array([1 / 3, 1 / 6, 1 / 6, 1 / 3])[np.newaxis, :]
+    )
+    rows_gamma = np.repeat(line_indices, 2, axis=1)  # [1 1 2 2]
+    cols_gamma = np.tile(line_indices, (1, 2))  # [1 2 1 2]
+    return sp.coo_matrix(
+        (k.ravel(), (rows_gamma.ravel(), cols_gamma.ravel())),
         shape=(node_coords.shape[0], node_coords.shape[0]),
         dtype=np.complex128,
     ).tocsr()
@@ -137,7 +160,7 @@ def fem_plot2(nodes, elements, phi, savefig=False, savepath="default.png"):
     fig, ax = plt.subplots(constrained_layout=True)
     triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
 
-    pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="hot")
+    pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="bwr")
     ax.set_aspect("equal")
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
