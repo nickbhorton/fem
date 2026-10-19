@@ -68,6 +68,45 @@ def assemble_k_alpha(
     ).tocsr()
 
 
+def assemble_k_beta(
+    nodes_coords: np.ndarray,
+    domain_element_indicies: np.ndarray,
+    beta: np.ndarray | None = None,
+):
+    """
+    This function assembles the k_beta matrix.
+
+    node_coords: np.ndarray of (number_of_nodes, 2), x and y coords of nodes
+    domain_element_indicies: np.ndarray of (number_of_elements, 3)
+        3 node indices that construct a triangle.
+    beta: np.ndarray of (number_of_nodes): represents the beta value on each
+        node.
+    """
+    element_areas = get_element_area(nodes_coords, domain_element_indicies)
+    if beta is not None:
+        # alpha[elements].mean(axis=1) averages the alpha on the element
+        beta_element_wise = beta[domain_element_indicies].mean(axis=1)
+        mult_array = (
+            np.tile(
+                np.array([2.0, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0]) / 12.0,
+                domain_element_indicies.shape[0],
+            )
+            * np.repeat(element_areas, 9)
+            * np.repeat(beta_element_wise, 9)
+        )
+    else:
+        mult_array = np.tile(
+            np.array([2.0, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 2.0]) / 12.0,
+            domain_element_indicies.shape[0],
+        ) * np.repeat(element_areas, 9)
+    rows = np.repeat(domain_element_indicies, 3, axis=1)  # [1 1 1 2 2 2 3 3 3]
+    cols = np.tile(domain_element_indicies, (1, 3))  # [1 2 3 1 2 3 1 2 3]
+    return sp.coo_matrix(
+        (mult_array.ravel(), (rows.ravel(), cols.ravel())),
+        shape=(nodes_coords.shape[0], nodes_coords.shape[0]),
+    ).tocsr()
+
+
 def fem_plot(nodes, elements, phi, savefig=False, savepath="default.png"):
     fig, ax = plt.subplots(1, 2, figsize=(10, 5), constrained_layout=True)
     triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
