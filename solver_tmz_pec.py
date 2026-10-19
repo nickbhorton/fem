@@ -87,7 +87,7 @@ np.add.at(
 b_neumann = b_neumann[free_node_indices]
 
 # final assembly
-k_total_free = k_alpha_free + k_beta_free + sp.csr_matrix(k_gamma_free)
+k_total_free = k_alpha_free + k_beta_free + k_gamma_free
 b_total = b_neumann + b_dirichlet
 
 # solve for phi

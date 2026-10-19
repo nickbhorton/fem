@@ -79,7 +79,7 @@ np.add.at(
 b_neumann = b_neumann[free_node_indices]
 
 # final assembly
-k_total_free = k_alpha_free + k_beta_free + sp.csr_matrix(k_gamma_free)
+k_total_free = k_alpha_free + k_beta_free + k_gamma_free
 b_total = b_neumann
 
 # solve for phi
@@ -87,6 +87,6 @@ phi = np.zeros(len(node_coords), dtype=np.complex128)
 phi[free_node_indices] = np.asarray(spla.spsolve(k_total_free.tocsc(), b_total))
 
 # plots
-fem_plot2(node_coords, element_indices, np.real(phi))
+fem_plot2(node_coords, element_indices, np.abs(phi))
 
 plt.show()

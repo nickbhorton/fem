@@ -160,7 +160,7 @@ def fem_plot2(nodes, elements, phi, savefig=False, savepath="default.png"):
     fig, ax = plt.subplots(constrained_layout=True)
     triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
 
-    pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="bwr")
+    pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="hot")
     ax.set_aspect("equal")
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
