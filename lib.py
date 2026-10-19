@@ -131,3 +131,19 @@ def fem_plot(nodes, elements, phi, savefig=False, savepath="default.png"):
     if savefig:
         fig.savefig(savepath, dpi=200)
     return fig
+
+
+def fem_plot2(nodes, elements, phi, savefig=False, savepath="default.png"):
+    fig, ax = plt.subplots(constrained_layout=True)
+    triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+
+    pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="hot")
+    ax.set_aspect("equal")
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("y (m)")
+    ax.set_title("Elements with Gouraud Shading")
+
+    fig.colorbar(pc, ax=ax, fraction=0.046, pad=0.04)
+    if savefig:
+        fig.savefig(savepath, dpi=200)
+    return fig
