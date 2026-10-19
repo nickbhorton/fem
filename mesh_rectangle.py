@@ -7,7 +7,7 @@ gmsh.model.add("rectangle")
 x0 = 0.8
 y0 = 0.05
 
-lc = 0.05
+lc = 0.005
 
 p1 = gmsh.model.geo.add_point(-x0, -y0, 0.0, lc)
 p2 = gmsh.model.geo.add_point(-x0, y0, 0.0, lc)
