@@ -22,7 +22,6 @@ y = np.linspace(
 x, y = np.meshgrid(x, y)
 rho = np.sqrt(x**2 + y**2)
 phi = np.atan2(y, x)
-phi_lin = np.linspace(0, 2.0 * np.pi, 1000)
 
 E0 = 1.0
 Ez_i = E0 * np.exp(-1j * k * x)

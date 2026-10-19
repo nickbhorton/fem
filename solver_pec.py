@@ -83,8 +83,8 @@ kappa = (
     E0
     * np.exp(-1j * k_0 * x[outer_line_indices])
     * (
-        1j * k_0
-        - (1j * k_0 * x[outer_line_indices]) / rho[outer_line_indices]
+        -(1j * k_0 * x[outer_line_indices]) / rho[outer_line_indices]
+        + 1j * k_0
         + 1 / (2 * rho[outer_line_indices])
     )
 ).mean(axis=1)

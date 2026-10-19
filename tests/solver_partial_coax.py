@@ -24,20 +24,18 @@ name_to_tag = {k: int(v[0]) for k, v in mesh.field_data.items()}
 # boundary condition lines
 inner_d = lines[line_tag == name_to_tag["inner_d"]]
 outer_d = lines[line_tag == name_to_tag["outer_d"]]
+zero_n = lines[line_tag == name_to_tag["zero_n"]]
+angle_n = lines[line_tag == name_to_tag["angle_n"]]
 
 # elements
 domain = elements[element_tag == name_to_tag["domain"]]
 
-# alpha
+
 a = np.abs(nodes[inner_d].max())
 b = np.abs(nodes[outer_d].max())
-epsilon_m = 5
-rho = np.sqrt(nodes[:, 0] ** 2 + nodes[:, 1] **2)
-epsilon_r = epsilon_m * (a / rho)
-
 inner_potential = 1.0
 outer_potential = 0.0
-k_alpha = assemble_k_alpha(nodes, domain, epsilon_r)
+k_alpha = assemble_k_alpha(nodes, domain)
 nodes_inner_d = np.unique(inner_d.ravel())
 nodes_outer_d = np.unique(outer_d.ravel())
 nodes_dirichlet = np.concatenate([nodes_inner_d, nodes_outer_d])
@@ -58,9 +56,7 @@ phi[nodes_dirichlet] = phi_dirichlet
 phi[nodes_free] = np.asarray(spla.spsolve(k_alpha_free.tocsc(), b_dirichlet))
 
 C_sim = epsilon_0 * phi @ (k_alpha @ phi) / (inner_potential - outer_potential) ** 2
-C_exact = 2 * np.pi * epsilon_0 * epsilon_m * a / (b - a) * (1/12)
-# print(C_sim * 1e12 * 12)
-# print(C_exact * 1e12 * 12)
+C_exact = 2 * np.pi * epsilon_0 / np.log(b / a) * (1 / 12)
 print(np.abs(C_sim - C_exact) / C_exact * 100, "% error")
 
 # plot
