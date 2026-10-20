@@ -5,6 +5,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from matplotlib import tri
 from scipy.constants import epsilon_0, mu_0
+from scipy.special import hankel2, jn
 
 
 def get_element_area(node_coords: np.ndarray, element_indices: np.ndarray):
@@ -135,49 +136,7 @@ def assemble_k_gamma(
     ).tocsr()
 
 
-def fem_plot(nodes, elements, phi, savefig=False, savepath="default.png"):
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5), constrained_layout=True)
-    triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
-
-    ax[0].triplot(triang, lw=0.5, color="grey")
-    ax[0].scatter(nodes[:, 0], nodes[:, 1], c=phi, cmap="inferno")
-    ax[0].set_aspect("equal")
-    ax[0].set_xlabel("x (m)")
-    ax[0].set_ylabel("y (m)")
-    ax[0].set_title("Node Solutions")
-
-    pc = ax[1].tripcolor(triang, phi, shading="gouraud", cmap="inferno")
-    ax[1].set_aspect("equal")
-    ax[1].set_xlabel("x (m)")
-    ax[1].set_ylabel("y (m)")
-    ax[1].set_title("Elements with Gouraud Shading")
-
-    fig.colorbar(pc, ax=ax[0], fraction=0.046, pad=0.04)
-    fig.colorbar(pc, ax=ax[1], fraction=0.046, pad=0.04)
-    if savefig:
-        fig.savefig(savepath, dpi=200)
-    return fig
-
-
-def fem_plot2(nodes, elements, phi, savefig=False, savepath="default.png"):
-    fig, ax = plt.subplots(constrained_layout=True)
-    triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
-
-    pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="hot")
-    ax.set_aspect("equal")
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("y (m)")
-    ax.set_title("Elements with Gouraud Shading")
-
-    fig.colorbar(pc, ax=ax, fraction=0.046, pad=0.04)
-    if savefig:
-        fig.savefig(savepath, dpi=200)
-    return fig
-
-
-def fem_pec_tmz(mesh_path):
-    mesh = meshio.read(mesh_path)
-
+def fem_pec_tmz(mesh):
     element_tag = mesh.get_cell_data("gmsh:physical", "triangle")
     line_tag = mesh.get_cell_data("gmsh:physical", "line")
     name_to_tag = {k: int(v[0]) for k, v in mesh.field_data.items()}
@@ -510,3 +469,69 @@ def fem_die_tez(mesh_path):
     phi = np.zeros(len(node_coords), dtype=np.complex128)
     phi[free_node_indices] = np.asarray(spla.spsolve(k_total_free.tocsc(), b_total))
     return phi
+
+
+def bistatic_echo_width_pec_tmz_analytical(phi: np.ndarray):
+    f = 10e9
+    phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
+    wavelength = phase_velocity / f
+    a = wavelength / 2
+    k = 2.0 * np.pi * f / phase_velocity
+    ka = k * a
+
+    N = 15
+    ns = np.arange(-N, N + 1)
+    pre_factor = jn(ns, ka) / hankel2(ns, ka)
+    return (4.0 / k) * np.abs(
+        (pre_factor[:, None] * np.exp(-1j * ns[:, None] * phi[None, :])).sum(axis=0)
+    ) ** 2
+
+
+def fem_plot(nodes, elements, phi, savefig=False, savepath="default.png"):
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5), constrained_layout=True)
+    triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+
+    ax[0].triplot(triang, lw=0.5, color="grey")
+    ax[0].scatter(nodes[:, 0], nodes[:, 1], c=phi, cmap="inferno")
+    ax[0].set_aspect("equal")
+    ax[0].set_xlabel("x (m)")
+    ax[0].set_ylabel("y (m)")
+    ax[0].set_title("Node Solutions")
+
+    pc = ax[1].tripcolor(triang, phi, shading="gouraud", cmap="inferno")
+    ax[1].set_aspect("equal")
+    ax[1].set_xlabel("x (m)")
+    ax[1].set_ylabel("y (m)")
+    ax[1].set_title("Elements with Gouraud Shading")
+
+    fig.colorbar(pc, ax=ax[0], fraction=0.046, pad=0.04)
+    fig.colorbar(pc, ax=ax[1], fraction=0.046, pad=0.04)
+    if savefig:
+        fig.savefig(savepath, dpi=200)
+    return fig
+
+
+def fem_plot2(nodes, elements, phi, savefig=False, savepath="default.png"):
+    fig, ax = plt.subplots(constrained_layout=True)
+    triang = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+
+    pc = ax.tripcolor(triang, phi, shading="gouraud", cmap="hot")
+    ax.set_aspect("equal")
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("y (m)")
+    ax.set_title("Elements with Gouraud Shading")
+
+    fig.colorbar(pc, ax=ax, fraction=0.046, pad=0.04)
+    if savefig:
+        fig.savefig(savepath, dpi=200)
+    return fig
+
+
+def polar_plot(phi, xs):
+    fig, ax = plt.subplots(layout="constrained")
+    ax.remove()
+    ax = fig.add_subplot(projection="polar")
+    for x in xs:
+        ax.plot(phi, x)
+    ax.grid(True, alpha=0.4)
+    return fig
