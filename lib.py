@@ -5,7 +5,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from matplotlib import tri
 from scipy.constants import epsilon_0, mu_0
-from scipy.special import hankel2, jn
+from scipy.special import h2vp, hankel2, jn, jvp
 
 
 def get_element_area(node_coords: np.ndarray, element_indices: np.ndarray):
@@ -226,9 +226,7 @@ def fem_pec_tmz(mesh):
     return phi
 
 
-def fem_pec_tez(mesh_path):
-    mesh = meshio.read(mesh_path)
-
+def fem_pec_tez(mesh):
     element_tag = mesh.get_cell_data("gmsh:physical", "triangle")
     line_tag = mesh.get_cell_data("gmsh:physical", "line")
     name_to_tag = {k: int(v[0]) for k, v in mesh.field_data.items()}
@@ -306,9 +304,7 @@ def fem_pec_tez(mesh_path):
     return phi
 
 
-def fem_die_tmz(mesh_path):
-    mesh = meshio.read(mesh_path)
-
+def fem_die_tmz(mesh):
     element_tag = mesh.get_cell_data("gmsh:physical", "triangle")
     line_tag = mesh.get_cell_data("gmsh:physical", "line")
     name_to_tag = {k: int(v[0]) for k, v in mesh.field_data.items()}
@@ -388,9 +384,7 @@ def fem_die_tmz(mesh_path):
     return phi
 
 
-def fem_die_tez(mesh_path):
-    mesh = meshio.read(mesh_path)
-
+def fem_die_tez(mesh):
     element_tag = mesh.get_cell_data("gmsh:physical", "triangle")
     line_tag = mesh.get_cell_data("gmsh:physical", "line")
     name_to_tag = {k: int(v[0]) for k, v in mesh.field_data.items()}
@@ -471,6 +465,31 @@ def fem_die_tez(mesh_path):
     return phi
 
 
+def bistatic_echo_width_die_tmz_analytical(phi: np.ndarray):
+    f = 10e9
+    epsilon_r = 9
+
+    phase_velocity_0 = 1 / np.sqrt(epsilon_0 * mu_0)
+    phase_velocity_1 = 1 / np.sqrt(epsilon_r * epsilon_0 * mu_0)
+    wavelength = phase_velocity_0 / f
+    a = wavelength / 2
+    k = 2.0 * np.pi * f / phase_velocity_0
+    kd = 2.0 * np.pi * f / phase_velocity_1
+    ka = k * a
+    kda = kd * a
+
+    N = 15
+    ns = np.arange(-N, N + 1)
+    coefficients = (
+        np.sqrt(epsilon_r) * jn(ns, ka) * jvp(ns, kda) - jvp(ns, ka) * jn(ns, kda)
+    ) / (
+        h2vp(ns, ka) * jn(ns, kda) - np.sqrt(epsilon_r) * hankel2(ns, ka) * jvp(ns, kda)
+    )
+    return (4.0 / k) * np.abs(
+        (coefficients[:, None] * np.exp(-1j * ns[:, None] * phi[None, :])).sum(axis=0)
+    ) ** 2
+
+
 def bistatic_echo_width_pec_tmz_analytical(phi: np.ndarray):
     f = 10e9
     phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
@@ -481,9 +500,61 @@ def bistatic_echo_width_pec_tmz_analytical(phi: np.ndarray):
 
     N = 15
     ns = np.arange(-N, N + 1)
-    pre_factor = jn(ns, ka) / hankel2(ns, ka)
+    coefficients = jn(ns, ka) / hankel2(ns, ka)
     return (4.0 / k) * np.abs(
-        (pre_factor[:, None] * np.exp(-1j * ns[:, None] * phi[None, :])).sum(axis=0)
+        (coefficients[:, None] * np.exp(-1j * ns[:, None] * phi[None, :])).sum(axis=0)
+    ) ** 2
+
+
+def bistatic_echo_width_die_tez_analytical(phi: np.ndarray):
+    f = 10e9
+    epsilon_r = 9
+
+    E0 = 1.0
+    H0 = E0 / np.sqrt(mu_0 / epsilon_0)
+
+    phase_velocity_0 = 1 / np.sqrt(epsilon_0 * mu_0)
+    phase_velocity_1 = 1 / np.sqrt(epsilon_r * epsilon_0 * mu_0)
+    wavelength = phase_velocity_0 / f
+    a = wavelength / 2
+    k = 2.0 * np.pi * f / phase_velocity_0
+    kd = 2.0 * np.pi * f / phase_velocity_1
+    ka = k * a
+    kda = kd * a
+
+    N = 15
+    ns = np.arange(-N, N + 1)
+    coefficients = (
+        H0
+        * (
+            (1.0 / np.sqrt(epsilon_r)) * jn(ns, ka) * jvp(ns, kda)
+            - jvp(ns, ka) * jn(ns, kda)
+        )
+        / (
+            h2vp(ns, ka) * jn(ns, kda)
+            - (1.0 / np.sqrt(epsilon_r)) * hankel2(ns, ka) * jvp(ns, kda)
+        )
+    )
+    return (4.0 / k) * np.abs(
+        (coefficients[:, None] * np.exp(-1j * ns[:, None] * phi[None, :])).sum(axis=0)
+    ) ** 2
+
+
+def bistatic_echo_width_pec_tez_analytical(phi: np.ndarray):
+    f = 10e9
+    E0 = 1.0
+    H0 = E0 / np.sqrt(mu_0 / epsilon_0)
+    phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
+    wavelength = phase_velocity / f
+    a = wavelength / 2
+    k = 2.0 * np.pi * f / phase_velocity
+    ka = k * a
+
+    N = 15
+    ns = np.arange(-N, N + 1)
+    coefficients = H0 * jvp(ns, ka) / h2vp(ns, ka)
+    return (4.0 / k) * np.abs(
+        (coefficients[:, None] * np.exp(-1j * ns[:, None] * phi[None, :])).sum(axis=0)
     ) ** 2
 
 
