@@ -1,3 +1,5 @@
+import time
+
 import gmsh
 import matplotlib.pyplot as plt
 import meshio
@@ -9,7 +11,7 @@ from scipy.constants import epsilon_0, mu_0
 from scipy.special import h2vp, hankel2, jn, jvp
 
 
-def gmsh_to_meshio() -> meshio.Mesh:
+def gmsh_to_meshio(time) -> meshio.Mesh:
     """
     This was written by claude.
     """
@@ -44,6 +46,7 @@ def gmsh_to_meshio() -> meshio.Mesh:
 
     cell_blocks = [(k, np.vstack(v)) for k, v in cells.items()]
     phys = [np.concatenate(cell_data[k]) for k, _ in cell_blocks]
+    print(f"mesh ({points.shape[0]} nodes): {time:.4f} sec")
 
     # field_data mirrors what meshio gives you when reading a .msh
     field_data = {
@@ -61,8 +64,9 @@ def gmsh_to_meshio() -> meshio.Mesh:
 
 def build_dielectric_mesh(f, lc):
     gmsh.initialize()
+    gmsh.option.setNumber("General.Verbosity", 1)
     try:
-        gmsh.option.setNumber("General.Verbosity", 1)
+        start_time = time.perf_counter()
         gmsh.model.add("die")
 
         phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
@@ -92,14 +96,17 @@ def build_dielectric_mesh(f, lc):
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", lc)
         gmsh.model.mesh.generate(2)
-        return gmsh_to_meshio()
+        end_time = time.perf_counter()
+        return gmsh_to_meshio(end_time - start_time)
     finally:
         gmsh.finalize()
 
 
 def build_pec_mesh(f, lc):
     gmsh.initialize()
+    gmsh.option.setNumber("General.Verbosity", 1)
     try:
+        start_time = time.perf_counter()
         gmsh.model.add("pec")
 
         phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
@@ -126,7 +133,8 @@ def build_pec_mesh(f, lc):
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", lc)
         gmsh.model.mesh.generate(2)
-        return gmsh_to_meshio()
+        end_time = time.perf_counter()
+        return gmsh_to_meshio(end_time - start_time)
     finally:
         gmsh.finalize()
 
@@ -291,11 +299,13 @@ def assemble_matrices(
     alpha,
     beta,
     gamma,
-    alpha_is_element_wise = False,
-    beta_is_element_wise = False
+    alpha_is_element_wise=False,
+    beta_is_element_wise=False,
 ):
     # k_alpha
-    k_alpha = assemble_k_alpha(node_coords, element_indices, alpha, alpha_is_element_wise)
+    k_alpha = assemble_k_alpha(
+        node_coords, element_indices, alpha, alpha_is_element_wise
+    )
     k_alpha_free = k_alpha[np.ix_(free_node_indices, free_node_indices)]
 
     # k_beta
@@ -332,6 +342,10 @@ def b_abc_first_order(node_coords, outer_line_indices, x, rho, k_0, E0=1.0):
     return b_neumann
 
 
+def gamma_abc(k_0, rho):
+    return 1j * k_0 + 1 / (2 * rho).mean(axis=1)
+
+
 def fem_pec_tmz(mesh, f, E0=1.0):
     k_0 = 2.0 * np.pi * f * np.sqrt(epsilon_0 * mu_0)
 
@@ -363,6 +377,8 @@ def fem_pec_tmz(mesh, f, E0=1.0):
         element_unique_node_indices, dirichlet_node_indices
     )
 
+    gamma = gamma_abc(k_0, rho[outer_line_indices])
+
     k_total_free, k_alpha, _, _ = assemble_matrices(
         node_coords,
         element_indices,
@@ -370,7 +386,7 @@ def fem_pec_tmz(mesh, f, E0=1.0):
         outer_line_indices,
         1 / mu_r,
         -(k_0**2) * epsilon_r,
-        1j * k_0 + 1 / (2 * rho[outer_line_indices]).mean(axis=1),
+        gamma,
     )
 
     # b_dirichlet
@@ -486,7 +502,7 @@ def fem_die_tmz(mesh, f, E0=1.0):
         -(k_0**2) * epsilon_r,
         1j * k_0 + 1 / (2 * rho[outer_line_indices]).mean(axis=1),
         False,
-        True
+        True,
     )
 
     # b_neumann
@@ -542,7 +558,7 @@ def fem_die_tez(mesh, f, E0=1.0):
         -(k_0**2) * mu_r,
         1j * k_0 + 1 / (2 * rho[outer_line_indices]).mean(axis=1),
         True,
-        False
+        False,
     )
 
     # b_neumann
@@ -559,7 +575,7 @@ def fem_die_tez(mesh, f, E0=1.0):
     return phi
 
 
-def bistatic_echo_width_die_tmz_analytical(phi: np.ndarray):
+def bistatic_echo_width_die_tmz_analytical(phi: np.ndarray, N):
     f = 10e9
     epsilon_r = 9
 
@@ -572,7 +588,6 @@ def bistatic_echo_width_die_tmz_analytical(phi: np.ndarray):
     ka = k * a
     kda = kd * a
 
-    N = 15
     ns = np.arange(-N, N + 1)
     coefficients = (
         np.sqrt(epsilon_r) * jn(ns, ka) * jvp(ns, kda) - jvp(ns, ka) * jn(ns, kda)
@@ -584,7 +599,7 @@ def bistatic_echo_width_die_tmz_analytical(phi: np.ndarray):
     ) ** 2
 
 
-def bistatic_echo_width_pec_tmz_analytical(phi: np.ndarray):
+def bistatic_echo_width_pec_tmz_analytical(phi: np.ndarray, N):
     f = 10e9
     phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
     wavelength = phase_velocity / f
@@ -592,7 +607,6 @@ def bistatic_echo_width_pec_tmz_analytical(phi: np.ndarray):
     k = 2.0 * np.pi * f / phase_velocity
     ka = k * a
 
-    N = 15
     ns = np.arange(-N, N + 1)
     coefficients = jn(ns, ka) / hankel2(ns, ka)
     return (4.0 / k) * np.abs(
@@ -600,7 +614,7 @@ def bistatic_echo_width_pec_tmz_analytical(phi: np.ndarray):
     ) ** 2
 
 
-def bistatic_echo_width_die_tez_analytical(phi: np.ndarray):
+def bistatic_echo_width_die_tez_analytical(phi: np.ndarray, N):
     f = 10e9
     epsilon_r = 9
 
@@ -616,7 +630,6 @@ def bistatic_echo_width_die_tez_analytical(phi: np.ndarray):
     ka = k * a
     kda = kd * a
 
-    N = 15
     ns = np.arange(-N, N + 1)
     coefficients = (
         H0
@@ -634,7 +647,7 @@ def bistatic_echo_width_die_tez_analytical(phi: np.ndarray):
     ) ** 2
 
 
-def bistatic_echo_width_pec_tez_analytical(phi: np.ndarray):
+def bistatic_echo_width_pec_tez_analytical(phi: np.ndarray, N):
     f = 10e9
     E0 = 1.0
     H0 = E0 / np.sqrt(mu_0 / epsilon_0)
@@ -644,11 +657,50 @@ def bistatic_echo_width_pec_tez_analytical(phi: np.ndarray):
     k = 2.0 * np.pi * f / phase_velocity
     ka = k * a
 
-    N = 15
     ns = np.arange(-N, N + 1)
     coefficients = H0 * jvp(ns, ka) / h2vp(ns, ka)
     return (4.0 / k) * np.abs(
         (coefficients[:, None] * np.exp(-1j * ns[:, None] * phi[None, :])).sum(axis=0)
+    ) ** 2
+
+
+def bistatic_echo_width(mesh, solution, phi, k, investigation_radius, N, E0=1.0):
+    node_coords = mesh.points[:, :2]
+    element_indices = mesh.get_cells_type("triangle")
+    x = node_coords[:, 0]
+    y = node_coords[:, 1]
+    triangulation = tri.Triangulation(x, y, element_indices)
+    solution_interpolation_generator_re = tri.LinearTriInterpolator(
+        triangulation, np.real(solution)
+    )
+    solution_interpolation_generator_im = tri.LinearTriInterpolator(
+        triangulation, np.imag(solution)
+    )
+
+    investigation_x = investigation_radius * np.cos(phi)
+    investigation_y = investigation_radius * np.sin(phi)
+    investigation_solution_re = solution_interpolation_generator_re(
+        investigation_x, investigation_y
+    )
+    investigation_solution_im = solution_interpolation_generator_im(
+        investigation_x, investigation_y
+    )
+    investigation_solution = investigation_solution_re + 1j * investigation_solution_im
+    investigation_scattered = investigation_solution - E0 * np.exp(
+        -1j * k * investigation_x
+    )
+    investigation_scattered_fft = np.fft.fft(investigation_scattered) / phi.shape[0]
+    ns = np.arange(-N, N + 1)
+    investigation_scattered_fft_n_wise = investigation_scattered_fft[ns]
+    hankel_coefficients = investigation_scattered_fft_n_wise / hankel2(
+        ns, k * investigation_radius
+    )
+    return (4.0 / k) * np.abs(
+        (
+            -((1j) ** ns[:, None])
+            * hankel_coefficients[:, None]
+            * np.exp(-1j * ns[:, None] * phi[None, :])
+        ).sum(axis=0)
     ) ** 2
 
 
