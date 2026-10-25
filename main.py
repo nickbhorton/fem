@@ -15,8 +15,6 @@ from lib import (
     fem_die_tmz,
     fem_pec_tez,
     fem_pec_tmz,
-    fem_plot2,
-    polar_plot,
 )
 
 dB = lambda x, wavelength: 10.0 * np.log10(x / wavelength)
@@ -43,8 +41,9 @@ sol_die_tmz = fem_die_tmz(mesh_die, f)
 sol_die_tez = fem_die_tez(mesh_die, f)
 
 # field plot
-cmap = "bwr"
-apply = lambda x: np.real(x)
+cmap = "hot"
+apply = lambda x: np.abs(x)
+equal_cmap = False
 fig, ax = plt.subplots(2, 2, layout="constrained", figsize=(10, 10))
 triang_pec = tri.Triangulation(
     mesh_pec.points[:, 0],
@@ -56,38 +55,64 @@ triang_die = tri.Triangulation(
     mesh_die.points[:, 1],
     triangles=mesh_die.get_cells_type("triangle"),
 )
-pc00 = ax[0][0].tripcolor(
-    triang_pec,
-    apply(sol_pec_tmz),
-    shading="gouraud",
-    cmap=cmap,
-    vmin=-np.max(np.abs(sol_pec_tmz)),
-    vmax=np.max(np.abs(sol_pec_tmz)),
-)
-pc01 = ax[0][1].tripcolor(
-    triang_pec,
-    apply(sol_pec_tez),
-    shading="gouraud",
-    cmap=cmap,
-    vmin=-np.max(np.abs(sol_pec_tez)),
-    vmax=np.max(np.abs(sol_pec_tez)),
-)
-pc10 = ax[1][0].tripcolor(
-    triang_die,
-    apply(sol_die_tmz),
-    shading="gouraud",
-    cmap=cmap,
-    vmin=-np.max(np.abs(sol_die_tmz)),
-    vmax=np.max(np.abs(sol_die_tmz)),
-)
-pc11 = ax[1][1].tripcolor(
-    triang_die,
-    apply(sol_die_tez),
-    shading="gouraud",
-    cmap=cmap,
-    vmin=-np.max(np.abs(sol_die_tez)),
-    vmax=np.max(np.abs(sol_die_tez)),
-)
+if equal_cmap:
+    pc00 = ax[0][0].tripcolor(
+        triang_pec,
+        apply(sol_pec_tmz),
+        shading="gouraud",
+        cmap=cmap,
+        vmin=-np.max(np.abs(sol_pec_tmz)),
+        vmax=np.max(np.abs(sol_pec_tmz)),
+    )
+    pc01 = ax[0][1].tripcolor(
+        triang_pec,
+        apply(sol_pec_tez),
+        shading="gouraud",
+        cmap=cmap,
+        vmin=-np.max(np.abs(sol_pec_tez)),
+        vmax=np.max(np.abs(sol_pec_tez)),
+    )
+    pc10 = ax[1][0].tripcolor(
+        triang_die,
+        apply(sol_die_tmz),
+        shading="gouraud",
+        cmap=cmap,
+        vmin=-np.max(np.abs(sol_die_tmz)),
+        vmax=np.max(np.abs(sol_die_tmz)),
+    )
+    pc11 = ax[1][1].tripcolor(
+        triang_die,
+        apply(sol_die_tez),
+        shading="gouraud",
+        cmap=cmap,
+        vmin=-np.max(np.abs(sol_die_tez)),
+        vmax=np.max(np.abs(sol_die_tez)),
+    )
+else:
+    pc00 = ax[0][0].tripcolor(
+        triang_pec,
+        apply(sol_pec_tmz),
+        shading="gouraud",
+        cmap=cmap,
+    )
+    pc01 = ax[0][1].tripcolor(
+        triang_pec,
+        apply(sol_pec_tez),
+        shading="gouraud",
+        cmap=cmap,
+    )
+    pc10 = ax[1][0].tripcolor(
+        triang_die,
+        apply(sol_die_tmz),
+        shading="gouraud",
+        cmap=cmap,
+    )
+    pc11 = ax[1][1].tripcolor(
+        triang_die,
+        apply(sol_die_tez),
+        shading="gouraud",
+        cmap=cmap,
+    )
 ax[0][0].set_title(r"PEC $\text{TM}_z$")
 ax[0][1].set_title(r"PEC $\text{TE}_z$")
 ax[1][0].set_title(r"Dielectric $\text{TM}_z$")
@@ -101,10 +126,18 @@ fig.colorbar(pc11, ax=ax[1][1], fraction=0.046, pad=0.04)
 
 # bistatic echo width plot
 N = 15
-bist_pec_tmz = bistatic_echo_width(mesh_pec, sol_pec_tmz, phi, k, 1.5 * wavelength, N, E0)
-bist_pec_tez = bistatic_echo_width(mesh_pec, sol_pec_tez, phi, k, 1.5 * wavelength, N, H0)
-bist_die_tmz = bistatic_echo_width(mesh_die, sol_die_tmz, phi, k, 1.5 * wavelength, N, E0)
-bist_die_tez = bistatic_echo_width(mesh_die, sol_die_tez, phi, k, 1.5 * wavelength, N, H0)
+bist_pec_tmz = bistatic_echo_width(
+    mesh_pec, sol_pec_tmz, phi, k, 1.5 * wavelength, N, E0
+)
+bist_pec_tez = bistatic_echo_width(
+    mesh_pec, sol_pec_tez, phi, k, 1.5 * wavelength, N, H0
+)
+bist_die_tmz = bistatic_echo_width(
+    mesh_die, sol_die_tmz, phi, k, 1.5 * wavelength, N, E0
+)
+bist_die_tez = bistatic_echo_width(
+    mesh_die, sol_die_tez, phi, k, 1.5 * wavelength, N, H0
+)
 
 bist_a_pec_tmz = bistatic_echo_width_pec_tmz_analytical(phi, N)
 bist_a_pec_tez = bistatic_echo_width_pec_tez_analytical(phi, N)

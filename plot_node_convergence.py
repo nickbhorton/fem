@@ -17,7 +17,7 @@ plt.rcParams.update(
 )
 
 
-data = np.load("node_convergence.npz")
+data = np.load("node_convergence_abc1.npz")
 nodes_pec = data["nodes_pec"]
 nodes_die = data["nodes_die"]
 error_pec_tmz = data["error_pec_tmz"]
@@ -27,10 +27,10 @@ error_die_tez = data["error_die_tez"]
 
 fig, ax = plt.subplots()
 
-ax.plot(nodes_pec, error_pec_tmz, label="pec_tmz", color="red")
-ax.plot(nodes_pec, error_pec_tez, label="pec_tez", color="darkred")
+ax.plot(nodes_pec, error_pec_tmz, label="pec_tmz", color="black")
+ax.plot(nodes_pec, error_pec_tez, label="pec_tez", color="black", ls="--")
 ax.plot(nodes_die, error_die_tmz, label="die_tmz", color="blue")
-ax.plot(nodes_die, error_die_tez, label="die_tez", color="darkblue")
+ax.plot(nodes_die, error_die_tez, label="die_tez", color="blue", ls="--")
 
 ax.set_xscale("log")
 ax.set_yscale("log")

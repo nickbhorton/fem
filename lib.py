@@ -267,6 +267,29 @@ def assemble_k_gamma(
     ).tocsr()
 
 
+def assemble_k_abc2(
+    node_coords: np.ndarray,
+    line_indices: np.ndarray,
+    abc2_coeff: np.ndarray,
+):
+    edges_gamma = node_coords[line_indices]
+    edge_lengths_gamma = np.linalg.norm(
+        edges_gamma[:, 0, :] - edges_gamma[:, 1, :], axis=1
+    )
+    k = np.squeeze(
+        abc2_coeff[:, np.newaxis]
+        / edge_lengths_gamma[:, np.newaxis]
+        * np.array([1, -1, -1, 1])[np.newaxis, :]
+    )
+    rows_gamma = np.repeat(line_indices, 2, axis=1)  # [1 1 2 2]
+    cols_gamma = np.tile(line_indices, (1, 2))  # [1 2 1 2]
+    return sp.coo_matrix(
+        (k.ravel(), (rows_gamma.ravel(), cols_gamma.ravel())),
+        shape=(node_coords.shape[0], node_coords.shape[0]),
+        dtype=np.complex128,
+    ).tocsr()
+
+
 def get_mesh_variables(mesh):
     element_tag = mesh.get_cell_data("gmsh:physical", "triangle")
     line_tag = mesh.get_cell_data("gmsh:physical", "line")
@@ -318,7 +341,7 @@ def assemble_matrices(
     return k_alpha_free + k_beta_free + k_gamma_free, k_alpha, k_beta, k_gamma
 
 
-def b_abc_first_order(node_coords, outer_line_indices, x, rho, k_0, E0=1.0):
+def b_neumann_abc1(node_coords, outer_line_indices, x, rho, k_0, E0=1.0):
     b_neumann = np.zeros(len(node_coords), dtype=np.complex128)
     kappa = (
         E0
@@ -342,11 +365,57 @@ def b_abc_first_order(node_coords, outer_line_indices, x, rho, k_0, E0=1.0):
     return b_neumann
 
 
-def gamma_abc(k_0, rho):
-    return 1j * k_0 + 1 / (2 * rho).mean(axis=1)
+def gamma_abc1(k_0, rho):
+    rho_m = rho.mean(axis=1)
+    return 1j * k_0 + 1 / (2 * rho_m)
 
 
-def fem_pec_tmz(mesh, f, E0=1.0):
+def gamma_abc2(k_0, rho):
+    rho_m = rho.mean(axis=1)
+    return (
+        1j * k_0
+        + 1 / (2 * rho_m)
+        - 1 / (8 * 1j * k_0 * rho_m**2)
+        - 1 / (8 * k_0**2 * rho_m**3)
+    )
+
+
+def abc2_coeff(k_0, rho):
+    rho_m = rho.mean(axis=1)
+    return 1 / (2j * k_0) + 1 / (2 * k_0**2 * rho_m)
+
+
+def b_neumann_abc2(node_coords, outer_line_indices, x, y, rho, k_0, E0=1.0):
+    b_neumann = np.zeros(len(node_coords), dtype=np.complex128)
+
+    abc2_c = abc2_coeff(k_0, rho[outer_line_indices])
+    gamma_abc2_coeff = gamma_abc2(k_0, rho[outer_line_indices])
+    rho_m = rho[outer_line_indices].mean(axis=1)
+    x_m = x[outer_line_indices].mean(axis=1)
+    y_m = y[outer_line_indices].mean(axis=1)
+    kappa = (
+        E0
+        * np.exp(-1j * k_0 * x_m)
+        * (
+            -(1j * k_0 * x_m) / rho_m
+            - abc2_c * (1j * k_0 * x_m - k_0**2 * y_m**2) / rho_m**2
+            + gamma_abc2_coeff
+        )
+    )
+    # (number_neumann_edges, (p1, p2), (x, y))
+    edges_neumann = node_coords[outer_line_indices]
+    edge_lengths_neumann = np.linalg.norm(
+        edges_neumann[:, 0, :] - edges_neumann[:, 1, :], axis=1
+    )
+    np.add.at(
+        b_neumann,
+        outer_line_indices.ravel(),
+        np.repeat(0.5 * kappa * edge_lengths_neumann, 2),
+    )
+    return b_neumann
+
+
+def fem_pec_tmz(mesh, f, second_abc=True, E0=1.0):
     k_0 = 2.0 * np.pi * f * np.sqrt(epsilon_0 * mu_0)
 
     (
@@ -355,7 +424,7 @@ def fem_pec_tmz(mesh, f, E0=1.0):
         name_to_tag,
         node_coords,
         x,
-        _,
+        y,
         rho,
         element_indices,
         line_indices,
@@ -377,7 +446,13 @@ def fem_pec_tmz(mesh, f, E0=1.0):
         element_unique_node_indices, dirichlet_node_indices
     )
 
-    gamma = gamma_abc(k_0, rho[outer_line_indices])
+    if second_abc:
+        gamma = gamma_abc2(k_0, rho[outer_line_indices])
+        k_abc2 = assemble_k_abc2(
+            node_coords, outer_line_indices, abc2_coeff(k_0, rho[outer_line_indices])
+        )
+    else:
+        gamma = gamma_abc1(k_0, rho[outer_line_indices])
 
     k_total_free, k_alpha, _, _ = assemble_matrices(
         node_coords,
@@ -388,6 +463,9 @@ def fem_pec_tmz(mesh, f, E0=1.0):
         -(k_0**2) * epsilon_r,
         gamma,
     )
+
+    if second_abc:
+        k_total_free += k_abc2[np.ix_(free_node_indices, free_node_indices)]
 
     # b_dirichlet
     phi_dirichlet = np.concatenate(
@@ -400,9 +478,14 @@ def fem_pec_tmz(mesh, f, E0=1.0):
     )
 
     # b_neumann
-    b_neumann = b_abc_first_order(node_coords, outer_line_indices, x, rho, k_0, E0)[
-        free_node_indices
-    ]
+    if second_abc:
+        b_neumann = b_neumann_abc2(node_coords, outer_line_indices, x, y, rho, k_0, E0)[
+            free_node_indices
+        ]
+    else:
+        b_neumann = b_neumann_abc1(node_coords, outer_line_indices, x, rho, k_0, E0)[
+            free_node_indices
+        ]
 
     # final assembly
     b_total = b_neumann + b_dirichlet
@@ -413,7 +496,7 @@ def fem_pec_tmz(mesh, f, E0=1.0):
     return phi
 
 
-def fem_pec_tez(mesh, f, E0=1.0):
+def fem_pec_tez(mesh, f, second_abc=True, E0=1.0):
     k_0 = 2.0 * np.pi * f * np.sqrt(epsilon_0 * mu_0)
     H0 = 1.0 / np.sqrt(mu_0 / epsilon_0)
 
@@ -423,7 +506,7 @@ def fem_pec_tez(mesh, f, E0=1.0):
         name_to_tag,
         node_coords,
         x,
-        _,
+        y,
         rho,
         element_indices,
         line_indices,
@@ -441,6 +524,14 @@ def fem_pec_tez(mesh, f, E0=1.0):
     element_unique_node_indices = np.unique(element_indices.ravel())
     free_node_indices = element_unique_node_indices
 
+    if second_abc:
+        gamma = gamma_abc2(k_0, rho[outer_line_indices])
+        k_abc2 = assemble_k_abc2(
+            node_coords, outer_line_indices, abc2_coeff(k_0, rho[outer_line_indices])
+        )
+    else:
+        gamma = gamma_abc1(k_0, rho[outer_line_indices])
+
     k_total_free, _, _, _ = assemble_matrices(
         node_coords,
         element_indices,
@@ -448,13 +539,21 @@ def fem_pec_tez(mesh, f, E0=1.0):
         outer_line_indices,
         1 / epsilon_r,
         -(k_0**2) * mu_r,
-        1j * k_0 + 1 / (2 * rho[outer_line_indices]).mean(axis=1),
+        gamma,
     )
 
+    if second_abc:
+        k_total_free += k_abc2[np.ix_(free_node_indices, free_node_indices)]
+
     # b_neumann
-    b_neumann = b_abc_first_order(node_coords, outer_line_indices, x, rho, k_0, H0)[
-        free_node_indices
-    ]
+    if second_abc:
+        b_neumann = b_neumann_abc2(node_coords, outer_line_indices, x, y, rho, k_0, H0)[
+            free_node_indices
+        ]
+    else:
+        b_neumann = b_neumann_abc1(node_coords, outer_line_indices, x, rho, k_0, H0)[
+            free_node_indices
+        ]
 
     # final assembly
     b_total = b_neumann
@@ -465,7 +564,7 @@ def fem_pec_tez(mesh, f, E0=1.0):
     return phi
 
 
-def fem_die_tmz(mesh, f, E0=1.0):
+def fem_die_tmz(mesh, f, second_abc=True, E0=1.0):
     k_0 = 2.0 * np.pi * f * np.sqrt(epsilon_0 * mu_0)
 
     (
@@ -474,7 +573,7 @@ def fem_die_tmz(mesh, f, E0=1.0):
         name_to_tag,
         node_coords,
         x,
-        _,
+        y,
         rho,
         element_indices,
         line_indices,
@@ -493,6 +592,14 @@ def fem_die_tmz(mesh, f, E0=1.0):
     element_unique_node_indices = np.unique(element_indices.ravel())
     free_node_indices = element_unique_node_indices
 
+    if second_abc:
+        gamma = gamma_abc2(k_0, rho[outer_line_indices])
+        k_abc2 = assemble_k_abc2(
+            node_coords, outer_line_indices, abc2_coeff(k_0, rho[outer_line_indices])
+        )
+    else:
+        gamma = gamma_abc1(k_0, rho[outer_line_indices])
+
     k_total_free, _, _, _ = assemble_matrices(
         node_coords,
         element_indices,
@@ -500,15 +607,23 @@ def fem_die_tmz(mesh, f, E0=1.0):
         outer_line_indices,
         1 / mu_r,
         -(k_0**2) * epsilon_r,
-        1j * k_0 + 1 / (2 * rho[outer_line_indices]).mean(axis=1),
+        gamma,
         False,
         True,
     )
 
+    if second_abc:
+        k_total_free += k_abc2[np.ix_(free_node_indices, free_node_indices)]
+
     # b_neumann
-    b_neumann = b_abc_first_order(node_coords, outer_line_indices, x, rho, k_0, E0)[
-        free_node_indices
-    ]
+    if second_abc:
+        b_neumann = b_neumann_abc2(node_coords, outer_line_indices, x, y, rho, k_0, E0)[
+            free_node_indices
+        ]
+    else:
+        b_neumann = b_neumann_abc1(node_coords, outer_line_indices, x, rho, k_0, E0)[
+            free_node_indices
+        ]
 
     # final assembly
     b_total = b_neumann
@@ -519,9 +634,9 @@ def fem_die_tmz(mesh, f, E0=1.0):
     return phi
 
 
-def fem_die_tez(mesh, f, E0=1.0):
+def fem_die_tez(mesh, f, second_abc=True, E0=1.0):
     k_0 = 2.0 * np.pi * f * np.sqrt(epsilon_0 * mu_0)
-    H0 = E0 / np.sqrt(mu_0 / epsilon_0)
+    H0 = 1.0 / np.sqrt(mu_0 / epsilon_0)
 
     (
         element_tag,
@@ -529,7 +644,7 @@ def fem_die_tez(mesh, f, E0=1.0):
         name_to_tag,
         node_coords,
         x,
-        _,
+        y,
         rho,
         element_indices,
         line_indices,
@@ -549,6 +664,14 @@ def fem_die_tez(mesh, f, E0=1.0):
     element_unique_node_indices = np.unique(element_indices.ravel())
     free_node_indices = element_unique_node_indices
 
+    if second_abc:
+        gamma = gamma_abc2(k_0, rho[outer_line_indices])
+        k_abc2 = assemble_k_abc2(
+            node_coords, outer_line_indices, abc2_coeff(k_0, rho[outer_line_indices])
+        )
+    else:
+        gamma = gamma_abc1(k_0, rho[outer_line_indices])
+
     k_total_free, _, _, _ = assemble_matrices(
         node_coords,
         element_indices,
@@ -556,15 +679,23 @@ def fem_die_tez(mesh, f, E0=1.0):
         outer_line_indices,
         1 / epsilon_r,
         -(k_0**2) * mu_r,
-        1j * k_0 + 1 / (2 * rho[outer_line_indices]).mean(axis=1),
+        gamma,
         True,
         False,
     )
 
+    if second_abc:
+        k_total_free += k_abc2[np.ix_(free_node_indices, free_node_indices)]
+
     # b_neumann
-    b_neumann = b_abc_first_order(node_coords, outer_line_indices, x, rho, k_0, H0)[
-        free_node_indices
-    ]
+    if second_abc:
+        b_neumann = b_neumann_abc2(node_coords, outer_line_indices, x, y, rho, k_0, H0)[
+            free_node_indices
+        ]
+    else:
+        b_neumann = b_neumann_abc1(node_coords, outer_line_indices, x, rho, k_0, H0)[
+            free_node_indices
+        ]
 
     # final assembly
     b_total = b_neumann
